@@ -8,6 +8,8 @@ from dotenv import load_dotenv
 from google.cloud import aiplatform
 from google.cloud import storage
 
+import re
+import uuid
 
 TARGET_COLUMN = "incident_next_30m"
 SPLIT_COLUMN = "split"
@@ -32,6 +34,44 @@ def require_env(name: str) -> str:
         raise RuntimeError(f"Falta la variable de entorno: {name}")
     return value
 
+def slugify(value: str) -> str:
+    """
+    Normaliza STUDENT_ID para usarlo en rutas, nombres y labels.
+    """
+    value = value.strip().lower()
+    value = re.sub(r"[^a-z0-9-]+", "-", value)
+    value = re.sub(r"-+", "-", value).strip("-")
+
+    if not value:
+        raise RuntimeError("STUDENT_ID no puede quedar vacío.")
+
+    return value
+
+
+def build_run_context() -> tuple[str, str]:
+    """
+    Crea un identificador estable de alumno y un identificador único de ejecución.
+    """
+    student_id = slugify(require_env("STUDENT_ID"))
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    short_uuid = uuid.uuid4().hex[:8]
+
+    run_id = f"{student_id}-{timestamp}-{short_uuid}"
+
+    return student_id, run_id
+
+
+def build_labels(student_id: str, run_id: str) -> dict:
+    """
+    Labels comunes para localizar recursos de Vertex AI.
+    """
+    return {
+        "course": "aiops",
+        "topic": "custom-training",
+        "case": "incident-risk",
+        "student_id": student_id[:63],
+        "run_id": run_id[:63],
+    }
 
 def build_operational_dataset(rows: int = 1500) -> pd.DataFrame:
     services = ["checkout", "payments", "catalog", "search", "api-gateway"]
@@ -158,13 +198,17 @@ def main() -> None:
         "europe-docker.pkg.dev/vertex-ai/prediction/sklearn-cpu.1-6:latest",
     )
 
-    version = datetime.now(timezone.utc).strftime("v%Y%m%d_%H%M%S")
-    output_dir = Path("data") / version
+    student_id, run_id = build_run_context()
+    labels = build_labels(student_id, run_id)
+
+    output_dir = Path("data") / student_id / run_id
     output_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"Región Vertex AI: {location}")
     print(f"Machine type entrenamiento: {machine_type}")
     print(f"Training container: {training_container}")
+    print(f"Alumno: {student_id}")
+    print(f"Ejecución: {run_id}")
 
     print("1. Generando dataset operativo...")
     df = build_operational_dataset(rows=1500)
@@ -183,14 +227,17 @@ def main() -> None:
     dataset_gcs_uri = upload_file_to_gcs(
         dataset_path,
         bucket_name,
-        f"datasets/custom-training/{version}/aiops_custom_training_dataset.csv",
+        (
+            f"students/{student_id}/custom-training/input/"
+            f"{run_id}/aiops_custom_training_dataset.csv"
+        ),
     )
 
     print(f"Dataset GCS: {dataset_gcs_uri}")
 
     trainer_script = "tema2c_trainer.py"
     if not Path(trainer_script).is_file():
-        raise RuntimeError("No existe tema2_trainer.py")
+        raise RuntimeError("No existe tema2c_trainer.py")
 
     if not run_vertex_training:
         print("\nRUN_VERTEX_CUSTOM_TRAINING=false")
@@ -212,11 +259,14 @@ def main() -> None:
         staging_bucket=f"gs://{bucket_name}",
     )
 
-    base_output_dir = f"gs://{bucket_name}/custom-training-output/{version}"
+    base_output_dir = (
+        f"gs://{bucket_name}/students/{student_id}/"
+        f"custom-training/output/{run_id}"
+    )
 
     print("5. Creando CustomTrainingJob...")
     job = aiplatform.CustomTrainingJob(
-        display_name=f"aiops-custom-training-{version}",
+        display_name=f"aiops-custom-training-{run_id}",
         script_path=str(trainer_script),
         container_uri=training_container,
         requirements=[
@@ -224,11 +274,7 @@ def main() -> None:
             "joblib>=1.4.2",
         ],
         model_serving_container_image_uri=serving_container,
-        labels={
-            "course": "aiops",
-            "topic": "custom-training",
-            "case": "incident-risk",
-        },
+        labels=labels,
     )
 
     print("6. Lanzando entrenamiento remoto...")
@@ -248,18 +294,18 @@ def main() -> None:
         replica_count=1,
         machine_type=machine_type,
         base_output_dir=base_output_dir,
-        model_display_name=f"aiops-incident-risk-custom-{version}",
-        model_labels={
-            "course": "aiops",
-            "topic": "custom-training",
-            "case": "incident-risk",
-        },
+        model_display_name=f"aiops-incident-risk-custom-{run_id}",
+        model_labels=labels,
         sync=True,
     )
 
     print("\nEntrenamiento remoto terminado.")
+    print(f"Alumno:            {student_id}")
+    print(f"Ejecución:         {run_id}")
+    print(f"Dataset GCS:       {dataset_gcs_uri}")
+    print(f"Artefactos GCS:    {base_output_dir}")
     print(f"Modelo registrado: {model.resource_name}")
-    print(f"Artefactos: {base_output_dir}")
+    print(f"Modelo visible:    aiops-incident-risk-custom-{run_id}")
 
 
 if __name__ == "__main__":
