@@ -181,7 +181,7 @@ def main() -> None:
     load_dotenv()
 
     project_id = require_env("PROJECT_ID")
-    location = os.getenv("VERTEX_LOCATION", "europe-west1")
+    location = "us-central1"
     bucket_name = require_env("BUCKET_NAME")
 
     run_vertex_training = (
@@ -220,17 +220,14 @@ def main() -> None:
     if not report["passed"]:
         raise RuntimeError("El dataset no ha pasado la validación.")
 
-    dataset_path = output_dir / "aiops_custom_training_dataset.csv"
+    dataset_path = "aiops_custom_training_dataset.csv"
     df.to_csv(dataset_path, index=False)
 
     print("3. Subiendo dataset a Cloud Storage...")
     dataset_gcs_uri = upload_file_to_gcs(
         dataset_path,
         bucket_name,
-        (
-            f"students/{student_id}/custom-training/input/"
-            f"{run_id}/aiops_custom_training_dataset.csv"
-        ),
+        f"datasets/custom-training/aiops_custom_training_dataset.csv",
     )
 
     print(f"Dataset GCS: {dataset_gcs_uri}")
@@ -259,10 +256,7 @@ def main() -> None:
         staging_bucket=f"gs://{bucket_name}",
     )
 
-    base_output_dir = (
-        f"gs://{bucket_name}/students/{student_id}/"
-        f"custom-training/output/{run_id}"
-    )
+    base_output_dir = f"gs://{bucket_name}/custom-training-output/{run_id}"
 
     print("5. Creando CustomTrainingJob...")
     job = aiplatform.CustomTrainingJob(

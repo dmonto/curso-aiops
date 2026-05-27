@@ -1,0 +1,85 @@
+main:
+  params: [decision]
+  steps:
+    - validate_input:
+        switch:
+          - condition: ${not("event_id" in decision)}
+            raise: "Falta event_id en la decisión."
+          - condition: ${not("correlation_id" in decision)}
+            raise: "Falta correlation_id en la decisión."
+          - condition: ${not("severity" in decision)}
+            raise: "Falta severity en la decisión."
+          - condition: ${not("service" in decision)}
+            raise: "Falta service en la decisión."
+
+    - build_base_operation:
+        assign:
+          - operation:
+              operation_id: ${"op-" + decision.event_id}
+              event_id: ${decision.event_id}
+              correlation_id: ${decision.correlation_id}
+              service: ${decision.service}
+              environment: ${default(map.get(decision, "environment"), "unknown")}
+              severity: ${decision.severity}
+              source_decision: ${decision}
+              orchestrator: "aiops-incident-workflow"
+              requires_human_review: false
+              operation_status: "created"
+
+    - route_by_severity:
+        switch:
+          - condition: ${decision.severity == "critical"}
+            next: critical_path
+          - condition: ${decision.severity == "warning"}
+            next: warning_path
+        next: info_path
+
+    - critical_path:
+        assign:
+          - operation.recommended_operation: "create_incident_candidate"
+          - operation.requires_human_review: true
+          - operation.priority: "P1"
+          - operation.reason: ${"Evento crítico en " + decision.service + ". Requiere revisión humana antes de remediación."}
+        next: encode_operation
+
+    - warning_path:
+        assign:
+          - operation.recommended_operation: "notify_team"
+          - operation.requires_human_review: false
+          - operation.priority: "P3"
+          - operation.reason: ${"Evento warning en " + decision.service + ". Se recomienda seguimiento operativo."}
+        next: encode_operation
+
+    - info_path:
+        assign:
+          - operation.recommended_operation: "store_only"
+          - operation.requires_human_review: false
+          - operation.priority: "P5"
+          - operation.reason: ${"Evento informativo en " + decision.service + ". No requiere acción inmediata."}
+        next: encode_operation
+
+    - encode_operation:
+        assign:
+          - operation_json: ${json.encode(operation)}
+          - operation_base64: ${base64.encode(text.encode(operation_json))}
+        next: publish_operation
+
+    - publish_operation:
+        call: googleapis.pubsub.v1.projects.topics.publish
+        args:
+          topic: ${"projects/" + sys.get_env("GOOGLE_CLOUD_PROJECT_ID") + "/topics/" + sys.get_env("OUTPUT_TOPIC")}
+          body:
+            messages:
+              - data: ${operation_base64}
+                attributes:
+                  severity: ${operation.severity}
+                  service: ${operation.service}
+                  recommended_operation: ${operation.recommended_operation}
+                  priority: ${operation.priority}
+        result: publish_result
+
+    - return_result:
+        return:
+          workflow: "aiops-incident-workflow"
+          operation: ${operation}
+          publish_result: ${publish_result}

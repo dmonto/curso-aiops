@@ -2,3 +2,5 @@
 **/**/*.csv
 **/*.joblib
 **/*.png
+*.jsonl
+*.txt

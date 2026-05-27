@@ -90,15 +90,22 @@ def load_training_data(uri: str) -> pd.DataFrame:
 
 
 def build_pipeline(feature_columns: List[str], n_estimators: int, random_state: int) -> Pipeline:
-    categorical_features = [
+    categorical_feature_names = [
         "service",
         "environment",
         "region",
         "deploy_last_30m",
     ]
 
+    categorical_features = [
+        feature_columns.index(col)
+        for col in categorical_feature_names
+    ]
+
     numeric_features = [
-        col for col in feature_columns if col not in categorical_features
+        idx
+        for idx, col in enumerate(feature_columns)
+        if col not in categorical_feature_names
     ]
 
     numeric_pipeline = Pipeline(
@@ -136,9 +143,8 @@ def build_pipeline(feature_columns: List[str], n_estimators: int, random_state: 
         ]
     )
 
-
 def evaluate_model(model: Pipeline, test_df: pd.DataFrame, feature_columns: List[str], target_column: str) -> dict:
-    x_test = test_df[feature_columns]
+    x_test = test_df[feature_columns].to_numpy()
     y_test = test_df[target_column]
 
     y_pred = model.predict(x_test)
@@ -220,7 +226,10 @@ def main() -> None:
     )
 
     print("Entrenando modelo...")
-    model.fit(train_df[feature_columns], train_df[args.target_column])
+    model.fit(
+        train_df[feature_columns].to_numpy(),
+        train_df[args.target_column],
+    )
 
     print("Evaluando modelo...")
     metrics = evaluate_model(

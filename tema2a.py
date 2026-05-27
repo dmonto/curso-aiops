@@ -95,7 +95,7 @@ def build_aiops_dataset(rows: int = 600) -> pd.DataFrame:
         degradation = i % 97 in [81, 82, 83, 84, 85, 86]
         deploy_last_30m = 1 if i % 53 in [0, 1, 2, 3, 4, 5] else 0
 
-        cpu = 33 + (i % 33) + (34 if degradation else 0)
+        cpu = 34 + (i % 34) + (35 if degradation else 0)
         memory = 50 + (i % 25) + (20 if degradation else 0)
         latency = 120 + (i % 60) * 5 + (650 if degradation else 0)
         error_rate = 0.01 + ((i % 7) / 1000) + (0.14 if degradation else 0)
