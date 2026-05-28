@@ -143,6 +143,10 @@ def build_deadletter_schema() -> str:
 def run() -> None:
     parser = argparse.ArgumentParser()
 
+    DATAFLOW_SERVICE_ACCOUNT = (
+        "capacitacion-ejecucion-ia-4668@asteci-capacitacion-ia.iam.gserviceaccount.com"
+    )
+
     parser.add_argument(
         "--subscription",
         required=True,
@@ -158,8 +162,23 @@ def run() -> None:
         required=True,
         help="Tabla BigQuery dead letter: <project>:<dataset>.<table>",
     )
+    parser.add_argument(
+        "--service_account_email",
+        default=DATAFLOW_SERVICE_ACCOUNT,
+        help="Service Account usada por los workers de Dataflow",
+    )
 
     known_args, pipeline_args = parser.parse_known_args()
+
+    # Pasamos la service account a Apache Beam / Dataflow.
+    # Si no se pasa explícitamente, Dataflow usaría la Compute Default SA.
+    if known_args.service_account_email:
+        pipeline_args.extend(
+            [
+                "--service_account_email",
+                known_args.service_account_email,
+            ]
+        )
 
     options = PipelineOptions(
         pipeline_args,

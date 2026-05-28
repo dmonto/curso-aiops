@@ -300,6 +300,7 @@ def classify_new_incidents(model: Pipeline) -> None:
 
     predictions = model.predict(new_incidents)
     probabilities = model.predict_proba(new_incidents)
+    print(probabilities)
     classes = model.named_steps["classifier"].classes_
 
     result = new_incidents.copy()
