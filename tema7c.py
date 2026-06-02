@@ -212,7 +212,7 @@ def main() -> None:
     print("# model = entrenar_automl_tabular(dataset)")
 
     # Descomentar solo cuando quieras lanzar entrenamiento real:
-    # model = entrenar_automl_tabular(dataset)
+    model = entrenar_automl_tabular(dataset)
 
 
 if __name__ == "__main__":
