@@ -7,7 +7,9 @@ from typing import Dict, List
 import pandas as pd
 from google.api_core.exceptions import NotFound
 from google.cloud import bigquery
+from dotenv import load_dotenv
 
+load_dotenv()
 
 def require_env(name: str) -> str:
     value = os.getenv(name)
