@@ -1,0 +1,82 @@
+system:
+  name: incident-risk-model
+  environment: dev
+  criticality: alta
+  objective: Predecir riesgo de incidente en servicios críticos durante los próximos 30 minutos.
+  scope:
+    includes:
+      - Servicios backend críticos
+      - Métricas de CPU y memoria
+      - Logs de errores
+      - Eventos de despliegue
+    excludes:
+      - Predicción de costes
+      - Análisis de amenazas de seguridad
+      - Remediación automática sin aprobación humana
+
+owners:
+  functional: sre-operaciones
+  technical: data-ml-platform
+  security: cloud-security
+  cloud_admin: cloud-platform
+
+architecture:
+  components:
+    - name: Cloud Logging
+      purpose: Fuente de logs de aplicación
+    - name: Cloud Monitoring
+      purpose: Fuente de métricas y alertas
+    - name: BigQuery
+      purpose: Histórico de features e incidencias
+    - name: Vertex AI
+      purpose: Entrenamiento y registro del modelo
+    - name: Pub/Sub
+      purpose: Distribución de eventos de riesgo
+    - name: Cloud Functions
+      purpose: Creación automática de tickets
+
+data:
+  dataset_uri: bq://aiops_training.incidents_features
+  time_range: 2026-01-01 a 2026-05-15
+  label: incident_next_30m
+  features:
+    - cpu_avg_5m
+    - memory_avg_5m
+    - latency_p95_5m
+    - error_rate_5m
+    - deploy_last_60m
+  limitations:
+    - No incluye incidentes no registrados en ITSM
+    - Puede degradarse si cambia la arquitectura de servicios
+
+model:
+  id: incident-risk-model
+  version: v1.2.0
+  type: classification
+  baseline: cpu-threshold-85pct-5min
+  metrics:
+    precision: 0.88
+    recall: 0.84
+    false_positive_rate: 0.13
+    latency_ms_p95: 620
+
+operation:
+  alert_rule: risk_score > 0.80 durante 2 ventanas consecutivas
+  action: Crear ticket automático P2
+  rollback: Desactivar Cloud Function y volver a baseline por threshold
+  monitoring:
+    - Latencia de inferencia
+    - Falsos positivos
+    - Volumen de tickets
+    - Errores de Cloud Function
+
+governance:
+  approval_status: approved_for_review
+  approved_by:
+    - owner_funcional
+    - sre_operaciones
+    - owner_tecnico
+  evidence:
+    - gs://curso-aiops-evidencias/modelos/incident-risk-model/v1.2.0/evaluation.json
+    - gs://curso-aiops-evidencias/modelos/incident-risk-model/v1.2.0/rollback.md
+  next_review_date: 2026-06-15

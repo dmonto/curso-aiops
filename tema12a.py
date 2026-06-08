@@ -8,7 +8,9 @@ from typing import Any, Dict, List
 from google import genai
 from google.genai.types import HttpOptions
 from google.cloud import bigquery
+from dotenv import load_dotenv
 
+load_dotenv()
 
 PROJECT_ID = os.getenv("PROJECT_ID")
 LOCATION = os.getenv("GENAI_REGION", "global")

@@ -1,0 +1,51 @@
+change_id: CHG-AIOPS-0012
+title: Promover incident-risk-model v1.2.0 a producción
+environment: prod
+change_type: model_deployment
+requested_by: data-ml-platform
+owner_functional: sre-operaciones
+owner_technical: data-ml-platform
+
+reason: >
+  El modelo v1.2.0 mejora el recall frente al baseline y reduce falsos negativos
+  en predicción de saturación de servicios críticos.
+
+affected_resources:
+  - vertex_endpoint: incident-risk-endpoint
+  - bigquery_table: aiops_training.incidents_features
+  - monitoring_policy: predictive-incident-alert
+  - pubsub_topic: aiops-risk-events
+  - cloud_function: create-incident-ticket
+
+before:
+  model_version: v1.1.0
+  threshold: 0.85
+  action: alert_only
+  service_account_role: vertex_ai_user
+
+after:
+  model_version: v1.2.0
+  threshold: 0.80
+  action: create_ticket
+  service_account_role: vertex_ai_user
+
+test_plan:
+  - Validar batch de predicciones contra últimos 30 días.
+  - Comparar volumen de alertas contra baseline.
+  - Revisar falsos positivos con SRE.
+  - Ejecutar prueba de creación de ticket en entorno de test.
+
+rollback_plan:
+  - Volver a model_version v1.1.0.
+  - Restaurar threshold 0.85.
+  - Desactivar creación automática de tickets.
+  - Mantener alerta informativa.
+
+approvals:
+  - owner_tecnico
+  - sre_operaciones
+  - owner_funcional
+
+evidence:
+  - gs://curso-aiops-evidencias/CHG-AIOPS-0012/evaluation.json
+  - gs://curso-aiops-evidencias/CHG-AIOPS-0012/rollback.md
